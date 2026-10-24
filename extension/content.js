@@ -49,11 +49,11 @@
   const translatedNodesRegistry = new Map();
   const processedNodes = new WeakSet();
 
-  // Elements to strictly exclude from translation
+  // Elements to strictly exclude from translation (PRE is handled selectively so plain text emails can be translated)
   const EXCLUDED_TAGS = new Set([
     "SCRIPT", "STYLE", "NOSCRIPT", "TEXTAREA", "INPUT", "SELECT",
-    "CODE", "PRE", "KBD", "SAMP", "SVG", "CANVAS", "AUDIO", "VIDEO",
-    "IFRAME", "EMBED", "OBJECT", "MATH"
+    "CODE", "KBD", "SAMP", "SVG", "CANVAS", "AUDIO", "VIDEO",
+    "EMBED", "OBJECT", "MATH"
   ]);
 
   /**
@@ -104,6 +104,10 @@
     let ancestor = parent;
     while (ancestor) {
       if (EXCLUDED_TAGS.has(ancestor.tagName)) return false;
+      if (ancestor.tagName === "PRE") {
+        // Only exclude PRE if it contains code tags (programming code blocks)
+        if (ancestor.querySelector && ancestor.querySelector("code, kbd, samp")) return false;
+      }
       if (ancestor.isContentEditable) return false;
       if (isNavigationOrSidebar(ancestor)) return false; // Strictly exclude sidebars & chat history!
       if (ancestor.classList && (
@@ -264,6 +268,18 @@
         }
       } catch (e) {}
     }
+
+    // Strategy B2: Check any PRE element that contains plain-text email message
+    try {
+      const allPre = document.querySelectorAll("pre");
+      for (const pre of allPre) {
+        if (pre.querySelector("code, kbd, samp")) continue;
+        const pt = (pre.innerText || pre.textContent || "").trim();
+        if (pt.length > 20 && pt.includes("\n")) {
+          return pre;
+        }
+      }
+    } catch (e) {}
 
     // Strategy C: Container following email headers ('Date:', 'Automatic reply')
     try {

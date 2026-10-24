@@ -4,11 +4,11 @@
  */
 const assert = require("assert");
 
-// Exclusion rules under test
+// Exclusion rules under test (PRE is handled selectively for code vs plain text email)
 const EXCLUDED_TAGS = new Set([
   "SCRIPT", "STYLE", "NOSCRIPT", "TEXTAREA", "INPUT", "SELECT",
-  "CODE", "PRE", "KBD", "SAMP", "SVG", "CANVAS", "AUDIO", "VIDEO",
-  "IFRAME", "EMBED", "OBJECT", "MATH"
+  "CODE", "KBD", "SAMP", "SVG", "CANVAS", "AUDIO", "VIDEO",
+  "EMBED", "OBJECT", "MATH"
 ]);
 
 function isTextEligible(text) {
