@@ -29,31 +29,37 @@ function detectLanguageFromText(text) {
   if (/[\u0400-\u04ff]/.test(text)) return "ru";
 
   const lower = " " + text.toLowerCase().replace(/[^a-zäöüßéèàùâêîôûñáíóúç ]/g, " ") + " ";
-  const de = [" der ", " die ", " das ", " und ", " in ", " den ", " von ", " zu ", " mit ", " sich ", " des ", " auf ", " für ", " ist ", " im ", " nicht ", " eine ", " ein ", " willkommen ", " nachrichten "];
-  const fr = [" le ", " la ", " les ", " et ", " en ", " un ", " une ", " du ", " des ", " dans ", " pour ", " sur ", " avec ", " ce ", " est ", " pas ", " bienvenue "];
-  const es = [" el ", " la ", " los ", " las ", " de ", " en ", " y ", " un ", " una ", " por ", " para ", " con ", " que ", " es ", " del ", " al ", " bienvenido "];
-  const en = [" the ", " and ", " to ", " of ", " a ", " in ", " is ", " that ", " for ", " you ", " it ", " with ", " on ", " as ", " are ", " this "];
+  const de = [
+    " der ", " die ", " das ", " und ", " in ", " den ", " von ", " zu ", " mit ", " sich ", " des ",
+    " auf ", " für ", " ist ", " im ", " nicht ", " eine ", " ein ", " dem ", " ich ", " sie ", " es ",
+    " er ", " wir ", " ihr ", " war ", " sind ", " haben ", " hat ", " wird ", " werden ", " einen ",
+    " einem ", " einer ", " eines ", " als ", " auch ", " nach ", " wie ", " bei ", " oder ", " aber ",
+    " vor ", " zur ", " zum ", " mehr ", " sehr ", " morgen ", " stehe ", " danach ", " frühstücke ",
+    " familie ", " fahre ", " arbeit ", " arbeite ", " kollegen ", " freizeit ", " lerne ", " gerne ",
+    " deutsch ", " abend ", " gehe ", " spazieren ", " koche ", " buch ", " möchte ", " jeden ", " tag ",
+    " willkommen ", " nachrichten ", " artikel ", " hilfsbereit ", " abendessen ", " schlafengehen "
+  ];
+  const fr = [" le ", " la ", " les ", " et ", " en ", " un ", " une ", " du ", " des ", " dans ", " pour ", " sur ", " avec ", " ce ", " est ", " pas ", " bienvenue ", " bonjour ", " monde "];
+  const es = [" el ", " la ", " los ", " las ", " de ", " en ", " y ", " un ", " una ", " por ", " para ", " con ", " que ", " es ", " del ", " al ", " bienvenido ", " hola ", " mundo "];
+  const en = [" the ", " and ", " to ", " of ", " a ", " in ", " is ", " that ", " for ", " you ", " it ", " with ", " on ", " as ", " are ", " this ", " was ", " be ", " at ", " from "];
 
   const score = (words) => words.reduce((acc, w) => acc + (lower.includes(w) ? 1 : 0), 0);
-  const scores = { de: score(de), fr: score(fr), es: score(es), en: score(en) };
+  const deUmlauts = (text.match(/[äöüß]/gi) || []).length;
+  const deScore = score(de) * 2 + deUmlauts * 3;
+  const frScore = score(fr) * 2;
+  const esScore = score(es) * 2;
+  const enScore = score(en) * 2;
 
-  let bestLang = "en";
-  let maxScore = scores.en;
-  for (const [lang, s] of Object.entries(scores)) {
-    if (s > maxScore) {
-      maxScore = s;
-      bestLang = lang;
-    }
-  }
+  if (deScore > enScore && deScore >= frScore && deScore >= esScore) return "de";
+  if (frScore > enScore && frScore >= deScore && frScore >= esScore) return "fr";
+  if (esScore > enScore && esScore >= deScore && esScore >= frScore) return "es";
 
-  // If no clear match, check special characters
-  if (maxScore === 0) {
-    if (/[äöüß]/i.test(text)) return "de";
-    if (/[éèàùâêîôûç]/i.test(text)) return "fr";
-    if (/[áíóúñ¿¡]/i.test(text)) return "es";
-  }
+  if (deScore > 0) return "de";
+  if (frScore > 0) return "fr";
+  if (esScore > 0) return "es";
+  if (enScore > 0) return "en";
 
-  return bestLang;
+  return "auto";
 }
 
 /**

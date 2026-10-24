@@ -140,6 +140,12 @@ body {
   border-radius: 10px;
 }
 
+.mode-pill.selection-mode {
+  background-color: #f3e8ff !important;
+  color: #7e22ce !important;
+  border: 1px solid #d8b4fe !important;
+}
+
 /* Dedicated English Content Box */
 .english-box-container {
   background-color: var(--bg-white);
@@ -158,6 +164,18 @@ body {
   background-color: #eff6ff;
   border-bottom: 1px solid #dbeafe;
   padding: 7px 10px;
+}
+
+.header-action-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.custom-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 48px;
 }
 
 .english-box-title {

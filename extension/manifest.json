@@ -5,7 +5,9 @@
   "description": "Detects foreign-language text on webpages and translates it into English with manual/automatic modes and original comparison.",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "scripting",
+    "clipboardRead"
   ],
   "host_permissions": [
     "http://*/*",

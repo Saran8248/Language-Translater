@@ -39,15 +39,16 @@
           <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15" class="box-icon" aria-hidden="true">
             <path fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 003 3.5v13A1.5 1.5 0 004.5 18h11a1.5 1.5 0 001.5-1.5V7.621a1.5 1.5 0 00-.44-1.06l-4.12-4.122A1.5 1.5 0 0011.378 2H4.5zm2.25 8.5a.75.75 0 000 1.5h6.5a.75.75 0 000-1.5h-6.5zm0 3a.75.75 0 000 1.5h6.5a.75.75 0 000-1.5h-6.5z" clip-rule="evenodd"/>
           </svg>
-          <strong>Translated English Content</strong>
+          <strong id="english-box-heading">Translated English</strong>
         </div>
-        <button id="btn-copy-english" class="btn-copy" type="button" title="Copy translated English text to clipboard">
-          <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13" aria-hidden="true">
-            <path d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12a1.5 1.5 0 01.439 1.061V14.5A1.5 1.5 0 0115.5 16h-7A1.5 1.5 0 017 14.5v-11z" />
-            <path d="M5 6a1 1 0 00-1 1v9.5A2.5 2.5 0 006.5 19h7a1 1 0 001-1v-.5H6.5A1.5 1.5 0 015 16V6z" />
-          </svg>
-          <span id="copy-btn-text">Copy Text</span>
-        </button>
+        <div class="header-action-group">
+          <button id="btn-paste-translate" class="btn-copy" type="button" title="Translate text from clipboard">
+            <span id="paste-btn-text">📋 Paste &amp; Translate</span>
+          </button>
+          <button id="btn-copy-english" class="btn-copy" type="button" title="Copy translated English text to clipboard">
+            <span id="copy-btn-text">Copy</span>
+          </button>
+        </div>
       </div>
 
       <div id="english-content-body" class="english-content-body">
@@ -57,6 +58,20 @@
         </div>
       </div>
     </section>
+
+    <!-- Quick Custom Text Input -->
+    <details class="settings-details custom-text-details">
+      <summary class="settings-summary">
+        <span>✏️ Translate Copied / Custom Text</span>
+        <svg class="chevron-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+          <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+        </svg>
+      </summary>
+      <div class="settings-body">
+        <textarea id="custom-text-input" class="form-input custom-textarea" rows="2" placeholder="Paste or type any foreign text here..."></textarea>
+        <button id="btn-translate-custom" class="btn btn-primary btn-sm w-full" type="button">Translate to English</button>
+      </div>
+    </details>
 
     <!-- Progress indicator -->
     <div id="progress-container" class="progress-container hidden" aria-hidden="true">

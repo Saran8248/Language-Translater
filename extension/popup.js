@@ -1,7 +1,7 @@
 /**
  * Universal Translator - Popup Script
- * Automatically reads the screen on open, translates into English,
- * and displays English content immediately without manual connection steps.
+ * Automatically detects user-selected text, copied clipboard text,
+ * or visible viewport content, translating ONLY the target text into English.
  */
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -9,10 +9,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   const backendBadge = document.getElementById("backend-status-badge");
   const backendStatusText = document.getElementById("backend-status-text");
   const pageLangDisplay = document.getElementById("page-lang-display");
+  const modeBadge = document.getElementById("mode-badge");
   const statusBox = document.getElementById("status-live-region");
+  const englishBoxHeading = document.getElementById("english-box-heading");
   const englishContentBody = document.getElementById("english-content-body");
+
+  const btnPasteTranslate = document.getElementById("btn-paste-translate");
+  const pasteBtnText = document.getElementById("paste-btn-text");
   const btnCopyEnglish = document.getElementById("btn-copy-english");
   const copyBtnText = document.getElementById("copy-btn-text");
+
+  const customTextInput = document.getElementById("custom-text-input");
+  const btnTranslateCustom = document.getElementById("btn-translate-custom");
 
   const progressContainer = document.getElementById("progress-container");
   const progressBarFill = document.getElementById("progress-bar-fill");
@@ -49,7 +57,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     latestEnglishText = blocks.join("\n\n");
     let html = "";
     if (isAlreadyEnglish) {
-      html += `<div style="margin-bottom:6px; color:#16a34a; font-weight:600; font-size:11px;">✓ This page is already in English:</div>`;
+      html += `<div style="margin-bottom:6px; color:#16a34a; font-weight:600; font-size:11px;">✓ This text is already in English:</div>`;
     }
 
     for (const b of blocks) {
@@ -59,28 +67,135 @@ document.addEventListener("DOMContentLoaded", async () => {
     englishContentBody.innerHTML = html;
   }
 
-  // Copy button handler
+  // Copy translated text button
   btnCopyEnglish.addEventListener("click", async () => {
     if (!latestEnglishText) return;
     try {
       await navigator.clipboard.writeText(latestEnglishText);
       copyBtnText.textContent = "Copied!";
       setTimeout(() => {
-        copyBtnText.textContent = "Copy Text";
+        copyBtnText.textContent = "Copy";
       }, 2000);
     } catch (e) {
       console.warn("Clipboard copy failed:", e);
     }
   });
 
-  // Automatically read and translate screen
+  // Paste from clipboard & translate button
+  btnPasteTranslate.addEventListener("click", async () => {
+    try {
+      pasteBtnText.textContent = "Pasting...";
+      const text = await navigator.clipboard.readText();
+      if (!text || !text.trim()) {
+        setStatus("Clipboard is empty. Copy some foreign text first (Ctrl+C).", "error");
+        pasteBtnText.textContent = "📋 Paste & Translate";
+        return;
+      }
+
+      const cleanText = text.trim();
+      modeBadge.textContent = "📋 Copied Text";
+      modeBadge.classList.add("selection-mode");
+      if (englishBoxHeading) englishBoxHeading.textContent = "Copied Text Translation";
+      setStatus("Translating clipboard text...", "normal");
+
+      const detResp = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: "detectLanguage", text: cleanText.substring(0, 400) }, resolve);
+      });
+      const lang = (detResp && detResp.language) ? detResp.language : "auto";
+      pageLangDisplay.textContent = lang.toUpperCase();
+
+      const lines = cleanText.split("\n").map(l => l.trim()).filter(Boolean);
+      const transResp = await new Promise((resolve) => {
+        chrome.runtime.sendMessage(
+          { action: "translateBatch", texts: lines, target: "en", source: lang },
+          resolve
+        );
+      });
+
+      const translated = (transResp && Array.isArray(transResp.translations)) ? transResp.translations : lines;
+      displayEnglishContent(translated, false);
+      setStatus(`Clipboard text translated (${translated.length} lines)`, "success");
+      pasteBtnText.textContent = "✓ Translated";
+      setTimeout(() => {
+        pasteBtnText.textContent = "📋 Paste & Translate";
+      }, 2000);
+    } catch (e) {
+      console.warn("Clipboard paste error:", e);
+      setStatus("Could not read clipboard. Please paste into the box below.", "error");
+      pasteBtnText.textContent = "📋 Paste & Translate";
+    }
+  });
+
+  // Custom text input translate button
+  if (btnTranslateCustom && customTextInput) {
+    btnTranslateCustom.addEventListener("click", async () => {
+      const text = customTextInput.value.trim();
+      if (!text) {
+        setStatus("Please enter or paste foreign text into the box.", "error");
+        return;
+      }
+
+      modeBadge.textContent = "✏️ Custom Text";
+      modeBadge.classList.add("selection-mode");
+      if (englishBoxHeading) englishBoxHeading.textContent = "Custom Text Translation";
+      setStatus("Translating text...", "normal");
+
+      const detResp = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: "detectLanguage", text: text.substring(0, 400) }, resolve);
+      });
+      const lang = (detResp && detResp.language) ? detResp.language : "auto";
+      pageLangDisplay.textContent = lang.toUpperCase();
+
+      const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+      const transResp = await new Promise((resolve) => {
+        chrome.runtime.sendMessage(
+          { action: "translateBatch", texts: lines, target: "en", source: lang },
+          resolve
+        );
+      });
+
+      const translated = (transResp && Array.isArray(transResp.translations)) ? transResp.translations : lines;
+      displayEnglishContent(translated, false);
+      setStatus("Custom text translated into English", "success");
+    });
+  }
+
+  // Inject content script into active tab if it's not already running
+  async function ensureContentScriptInjected(tabId) {
+    return new Promise((resolve) => {
+      chrome.tabs.sendMessage(tabId, { action: "ping" }, async (res) => {
+        if (chrome.runtime.lastError || !res) {
+          try {
+            await chrome.scripting.insertCSS({
+              target: { tabId: tabId },
+              files: ["content.css"]
+            });
+            await chrome.scripting.executeScript({
+              target: { tabId: tabId },
+              files: ["content.js"]
+            });
+            setTimeout(resolve, 200);
+          } catch (err) {
+            console.warn("Script injection fallback error:", err);
+            resolve();
+          }
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  // Automatically read and translate screen or user selection
   async function triggerAutoScreenTranslation() {
     if (!activeTabId) return;
 
     isTranslating = true;
     btnTranslate.disabled = true;
     btnTranslateText.textContent = "Translating...";
-    setStatus("Reading screen and auto-translating into English...", "normal");
+    setStatus("Analyzing screen / selected text...", "normal");
+
+    await ensureContentScriptInjected(activeTabId);
 
     chrome.tabs.sendMessage(activeTabId, { action: "autoReadAndTranslateScreen" }, (response) => {
       isTranslating = false;
@@ -89,7 +204,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       if (chrome.runtime.lastError || !response) {
         setStatus("Could not read tab. Refresh the webpage if needed.", "error");
-        englishContentBody.innerHTML = `<p style="color:#dc2626;">Could not access page text. Please refresh the webpage.</p>`;
+        englishContentBody.innerHTML = `<p style="color:#dc2626;">Could not access page text. Please refresh the webpage once, then click <strong>Re-scan Screen</strong>.</p>`;
         return;
       }
 
@@ -97,6 +212,31 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (response.pageLanguage) {
         pageLangDisplay.textContent = response.pageLanguage.toUpperCase();
       }
+
+      // Priority 1: User Selected Text
+      if (response.isSelection) {
+        modeBadge.textContent = "🎯 Selected Text";
+        modeBadge.classList.add("selection-mode");
+        if (englishBoxHeading) englishBoxHeading.textContent = "Selected Text Translation";
+        setStatus(`Translated selected text (${response.count || 1} lines)`, "success");
+        displayEnglishContent(response.englishBlocks, false);
+        return;
+      }
+
+      // Priority 2: Active Email Body Detected (Webmail / CRM Inbox)
+      if (response.isEmailBody) {
+        modeBadge.textContent = "📧 Email Body";
+        modeBadge.classList.add("selection-mode");
+        if (englishBoxHeading) englishBoxHeading.textContent = "Email Body Translation";
+        setStatus(`Email body translated into English (${response.count || 1} lines)`, "success");
+        displayEnglishContent(response.englishBlocks, false);
+        return;
+      }
+
+      // Priority 2: General Viewport Page Text
+      modeBadge.textContent = "Instant English";
+      modeBadge.classList.remove("selection-mode");
+      if (englishBoxHeading) englishBoxHeading.textContent = "Translated English Content";
 
       if (response.isEnglish) {
         pageLangDisplay.textContent = "EN (English)";
@@ -173,7 +313,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
       }
 
-      // AUTOMATICALLY READ & TRANSLATE SCREEN ON OPEN!
+      await ensureContentScriptInjected(activeTabId);
       triggerAutoScreenTranslation();
     } catch (e) {
       console.warn("Init tab error:", e);
