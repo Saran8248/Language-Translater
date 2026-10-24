@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Universal Translator</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-branding">
+        <img src="icons/icon32.png" alt="" class="header-logo" width="28" height="28">
+        <div>
+          <h1 class="header-title">Universal Translator</h1>
+          <p class="header-subtitle">Webpage Translation to English</p>
+        </div>
+      </div>
+      <div id="backend-status-badge" class="status-badge badge-checking" title="Backend service status">
+        <span class="status-dot"></span>
+        <span id="backend-status-text">Checking...</span>
+      </div>
+    </header>
+
+    <!-- Page Info Banner -->
+    <section class="page-info-banner" aria-label="Page Information">
+      <span class="info-label">Page Language:</span>
+      <span id="page-lang-display" class="page-lang-tag">Detecting...</span>
+    </section>
+
+    <!-- Primary Actions -->
+    <section class="actions-section" aria-label="Translation Actions">
+      <button id="btn-translate" class="btn btn-primary" type="button">
+        <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16" aria-hidden="true">
+          <path d="M7.75 2.75a.75.75 0 00-1.5 0v1.258a32.987 32.987 0 00-3.599.278.75.75 0 10.198 1.487A31.545 31.545 0 016.25 5.5v2.27c-.896.79-1.88 1.493-2.923 2.088a.75.75 0 00.746 1.302A24.58 24.58 0 007.25 9.47v5.78a.75.75 0 001.5 0V9.47a24.584 24.584 0 003.177 1.69.75.75 0 00.746-1.302c-1.043-.595-2.027-1.299-2.923-2.088V5.5c1.13.09 2.247.24 3.349.447a.75.75 0 00.28-1.474 32.987 32.987 0 00-3.599-.278V2.75z"/>
+        </svg>
+        <span id="btn-translate-text">Translate this page</span>
+      </button>
+
+      <button id="btn-restore" class="btn btn-secondary" type="button">
+        <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16" aria-hidden="true">
+          <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.451a.75.75 0 000-1.5H4.5a.75.75 0 00-.75.75v3.75a.75.75 0 001.5 0v-2.14l.35.35a7 7 0 0011.712-3.138.75.75 0 00-1.5-.377zM4.688 8.576a5.5 5.5 0 019.201-2.466l.312.311H11.75a.75.75 0 000 1.5h3.75a.75.75 0 00.75-.75V3.421a.75.75 0 00-1.5 0v2.14l-.35-.35A7 7 0 002.688 8.35a.75.75 0 001.5.376z" clip-rule="evenodd"/>
+        </svg>
+        <span>Restore original page</span>
+      </button>
+    </section>
+
+    <!-- Progress indicator -->
+    <div id="progress-container" class="progress-container hidden" aria-hidden="true">
+      <div class="progress-bar-track">
+        <div id="progress-bar-fill" class="progress-bar-fill" style="width: 0%;"></div>
+      </div>
+      <span id="progress-text" class="progress-text">Translating: 0 / 0</span>
+    </div>
+
+    <!-- Status Message (Accessible Live Region) -->
+    <div id="status-live-region" class="status-box" role="status" aria-live="polite">
+      Ready to translate
+    </div>
+
+    <!-- Collapsible Settings Section -->
+    <details class="settings-details" open>
+      <summary class="settings-summary">
+        <span>Settings & Configuration</span>
+        <svg class="chevron-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+          <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+        </svg>
+      </summary>
+
+      <form id="settings-form" class="settings-body">
+        <!-- Toggle: Automatic Translation -->
+        <label class="toggle-control" for="toggle-auto">
+          <span class="toggle-label-text">
+            <strong>Automatic translation</strong>
+            <small>Translate foreign pages on load</small>
+          </span>
+          <input type="checkbox" id="toggle-auto" class="toggle-checkbox" checked>
+          <span class="toggle-switch"></span>
+        </label>
+
+        <!-- Toggle: Show Original Text -->
+        <label class="toggle-control" for="toggle-original">
+          <span class="toggle-label-text">
+            <strong>Show original text</strong>
+            <small>Display English alongside source</small>
+          </span>
+          <input type="checkbox" id="toggle-original" class="toggle-checkbox" checked>
+          <span class="toggle-switch"></span>
+        </label>
+
+        <!-- Select: Display Mode -->
+        <div class="form-group">
+          <label for="select-display-mode" class="form-label">Display Style</label>
+          <select id="select-display-mode" class="form-select">
+            <option value="inline-badge">Inline Badge [EN: ...]</option>
+            <option value="ruby-subtitle">Subtitle Below Original</option>
+            <option value="replace-with-tooltip">Replace with Tooltip Preview</option>
+          </select>
+        </div>
+
+        <!-- Select: Target Language -->
+        <div class="form-group">
+          <label for="select-target-lang" class="form-label">Target Language</label>
+          <select id="select-target-lang" class="form-select">
+            <option value="en" selected>English (en)</option>
+            <option value="es">Spanish (es)</option>
+            <option value="fr">French (fr)</option>
+            <option value="de">German (de)</option>
+            <option value="ja">Japanese (ja)</option>
+            <option value="zh">Chinese (zh)</option>
+          </select>
+        </div>
+
+        <!-- Input: Backend API URL -->
+        <div class="form-group">
+          <label for="input-backend-url" class="form-label">Backend Service URL</label>
+          <div class="input-with-button">
+            <input type="url" id="input-backend-url" class="form-input" value="http://127.0.0.1:8000" placeholder="http://127.0.0.1:8000" required>
+            <button id="btn-test-backend" class="btn btn-secondary btn-sm" type="button" title="Test backend server">Test</button>
+          </div>
+        </div>
+
+        <!-- Save Button -->
+        <div class="form-footer">
+          <button id="btn-save-settings" class="btn btn-secondary w-full" type="submit">
+            Save settings
+          </button>
+        </div>
+      </form>
+    </details>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span>Universal Translator v1.0.0</span>
+      <span class="footer-dot">•</span>
+      <span id="footer-provider-name">Local Proxy</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

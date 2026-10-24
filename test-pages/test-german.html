@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deutscher Testartikel - Universal Translator</title>
+  <style>
+    body { font-family: system-ui, sans-serif; line-height: 1.6; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #1f2937; }
+    header { border-bottom: 2px solid #e5e7eb; padding-bottom: 16px; margin-bottom: 24px; }
+    h1 { color: #111827; }
+    .badge { display: inline-block; background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+    .card { background: #f9fafb; border: 1px solid #e5e7eb; padding: 20px; border-radius: 8px; margin: 20px 0; }
+    pre { background: #1e293b; color: #f8fafc; padding: 14px; border-radius: 6px; overflow-x: auto; }
+    form { background: #f3f4f6; padding: 16px; border-radius: 6px; margin-top: 20px; }
+    input, button { padding: 8px 12px; margin-right: 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="badge">Nachrichten</span>
+    <h1>Willkommen auf unserer Webseite</h1>
+    <p>Dies ist ein Testartikel zur Überprüfung der automatischen Übersetzung ins Englische.</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>Über dieses Projekt</h2>
+      <p>
+        Universal Translator ist eine Browser-Erweiterung, die fremdsprachige Texte auf Webseiten erkennt und ins Englische übersetzt. Sie ermöglicht es den Benutzern, sowohl den Originaltext als auch die englische Übersetzung gleichzeitig zu sehen.
+      </p>
+      <p>
+        Die Originalformatierung und Verlinkungen wie dieser <a href="#details" id="test-link">Link zu weiteren Details</a> bleiben dabei vollständig erhalten.
+      </p>
+    </section>
+
+    <section class="card">
+      <h3>Wichtige Funktionen</h3>
+      <ul>
+        <li>Automatische Spracherkennung und Übersetzung</li>
+        <li>Wiederherstellung des Originaltextes per Mausklick</li>
+        <li>Schutz von sensiblen Formularfeldern und Codeblöcken</li>
+      </ul>
+    </section>
+
+    <section>
+      <h3>Code-Erhaltungstest</h3>
+      <p>Der folgende Programmcode darf vom Übersetzer NICHT verändert werden:</p>
+      <pre><code>function berechneSumme(a, b) {
+    // Dies ist ein Kommentar im Code
+    return a + b;
+}</code></pre>
+    </section>
+
+    <section>
+      <h3>Formular-Eingabetest</h3>
+      <p>Texteingabefelder dürfen ebenfalls nicht überschrieben werden:</p>
+      <form onsubmit="event.preventDefault();">
+        <label for="username">Benutzername eingeben:</label>
+        <input type="text" id="username" value="Max Mustermann">
+        <button type="submit">Absenden</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

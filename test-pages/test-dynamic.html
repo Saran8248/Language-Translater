@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dynamischer Inhaltstest - Universal Translator</title>
+  <style>
+    body { font-family: system-ui, sans-serif; line-height: 1.6; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #1e293b; }
+    button { background: #2563eb; color: #ffffff; border: none; padding: 10px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    .dynamic-list { margin-top: 20px; display: flex; flex-direction: column; gap: 8px; }
+    .item { background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h1>Dynamischer Webseitentest</h1>
+  <p>Diese Seite simuliert eine Single-Page-Applikation (SPA), bei der nach dem Laden der Seite neue Inhalte per JavaScript hinzugefügt werden.</p>
+
+  <button id="btn-add-item" type="button">Neues deutsches Element hinzufügen</button>
+
+  <div id="dynamic-container" class="dynamic-list">
+    <div class="item">Ursprünglicher Eintrag 1: Guten Morgen aus Berlin.</div>
+    <div class="item">Ursprünglicher Eintrag 2: Willkommen auf unserer Plattform.</div>
+  </div>
+
+  <script>
+    let counter = 3;
+    document.getElementById("btn-add-item").addEventListener("click", () => {
+      const container = document.getElementById("dynamic-container");
+      const newItem = document.createElement("div");
+      newItem.className = "item";
+      newItem.textContent = `Dynamisch hinzugefügter Eintrag ${counter++}: Dies ist ein neuer deutscher Text, der automatisch übersetzt werden soll.`;
+      container.appendChild(newItem);
+    });
+  </script>
+</body>
+</html>
