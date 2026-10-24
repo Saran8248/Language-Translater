@@ -1,15 +1,14 @@
 /**
  * Universal Translator - Content Script
- * Handles text extraction, safe rendering, restoration, dynamic DOM mutations,
- * and language detection.
+ * Automatically reads screen text, safely renders translations into the DOM,
+ * and supplies English content directly to the popup.
  */
 
 (function () {
-  // Prevent duplicate script execution in the same context
   if (window.__universalTranslatorLoaded) return;
   window.__universalTranslatorLoaded = true;
 
-  // State management
+  // Settings & state
   let currentSettings = {
     autoTranslate: true,
     showOriginal: true,
@@ -18,15 +17,14 @@
     displayMode: "inline-badge"
   };
 
-  let pageStatus = "ready"; // "ready" | "translating" | "translated" | "already_english" | "restored" | "error"
+  let pageStatus = "ready"; // "ready" | "translating" | "translated" | "already_english" | "restored"
   let pageLanguage = "auto";
   let isEnglishPage = false;
   let translationSessionId = 0;
   let isMutatingOwnDom = false;
 
-  // Track modified nodes: Map<TextNode, { originalText, badgeElement, mode }>
+  // Track modified nodes: Map<TextNode, { originalText, element, mode }>
   const translatedNodesRegistry = new Map();
-  // WeakSet to avoid processing already seen text nodes
   const processedNodes = new WeakSet();
 
   // Elements to strictly exclude from translation
@@ -42,12 +40,11 @@
   function isNodeEligible(node) {
     if (!node || node.nodeType !== Node.TEXT_NODE) return false;
 
-    // Check if empty or whitespace only
     const text = node.textContent;
     if (!text || !text.trim()) return false;
 
-    // Ignore pure numbers, punctuation, or single symbols
     const trimmed = text.trim();
+    // Ignore pure numbers, punctuation, or single symbols
     if (/^[\d\s.,\/#!$%\^&\*;:{}=\-_`~()@+?><\[\]'"]+$/.test(trimmed)) return false;
 
     // Ignore URLs or email addresses
@@ -59,7 +56,6 @@
     const parent = node.parentElement;
     if (!parent) return false;
 
-    // Check excluded tags on parent and ancestors
     let ancestor = parent;
     while (ancestor) {
       if (EXCLUDED_TAGS.has(ancestor.tagName)) return false;
@@ -79,19 +75,17 @@
   }
 
   /**
-   * Determine page language from document attributes and meta tags
+   * Determine page language from attributes, meta tags, and text samples
    */
   async function detectPageLanguage() {
     let lang = "";
 
-    // 1. Check html lang or body lang
     if (document.documentElement && document.documentElement.lang) {
       lang = document.documentElement.lang.trim().toLowerCase();
     } else if (document.body && document.body.lang) {
       lang = document.body.lang.trim().toLowerCase();
     }
 
-    // 2. Check meta content-language
     if (!lang) {
       const meta = document.querySelector('meta[http-equiv="content-language"], meta[name="language"]');
       if (meta && meta.content) {
@@ -99,7 +93,6 @@
       }
     }
 
-    // Check if explicitly English
     if (lang && (lang === "en" || lang.startsWith("en-") || lang.startsWith("eng"))) {
       isEnglishPage = true;
       pageLanguage = lang;
@@ -111,7 +104,7 @@
       return lang;
     }
 
-    // 3. Fallback: sample page text and ask backend
+    // Sample visible text to detect
     const sampleNodes = [];
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
       acceptNode: (n) => isNodeEligible(n) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
@@ -131,7 +124,7 @@
       try {
         const response = await new Promise((resolve) => {
           chrome.runtime.sendMessage(
-            { action: "detectLanguage", text: sampleText.substring(0, 300), backendUrl: currentSettings.backendUrl },
+            { action: "detectLanguage", text: sampleText.substring(0, 300) },
             resolve
           );
         });
@@ -141,7 +134,7 @@
           return pageLanguage;
         }
       } catch (e) {
-        // Fallback to auto
+        // Fallback
       }
     }
 
@@ -170,6 +163,41 @@
   }
 
   /**
+   * Extract readable screen text paragraphs for popup reader view
+   */
+  function extractReadableScreenSummary() {
+    const blocks = [];
+    const elements = document.querySelectorAll("h1, h2, h3, h4, p, li, article, section, [role='article']");
+
+    for (const el of elements) {
+      if (EXCLUDED_TAGS.has(el.tagName) || el.isContentEditable) continue;
+      const text = el.innerText || el.textContent;
+      if (text && text.trim().length > 15) {
+        const clean = text.trim();
+        // Skip duplicate additions
+        if (!blocks.some(b => b.includes(clean) || clean.includes(b))) {
+          blocks.push(clean);
+          if (blocks.length >= 25) break; // First 25 major readable blocks
+        }
+      }
+    }
+
+    // Fallback: If no structured blocks found, gather from text nodes
+    if (blocks.length === 0) {
+      const textNodes = collectEligibleTextNodes(document.body);
+      for (const n of textNodes) {
+        const val = n.textContent.trim();
+        if (val.length > 20) {
+          blocks.push(val);
+          if (blocks.length >= 20) break;
+        }
+      }
+    }
+
+    return blocks;
+  }
+
+  /**
    * Safely render translated text into the DOM according to current display mode
    * NEVER evaluates HTML; uses safe text assignment only.
    */
@@ -182,13 +210,11 @@
       const showOriginal = currentSettings.showOriginal !== false;
 
       if (showOriginal && mode === "ruby-subtitle") {
-        // Subtitle view: insert a block beneath
         const subtitle = document.createElement("div");
         subtitle.className = "ut-translation-subtitle";
         subtitle.setAttribute("data-ut-translation", "true");
-        subtitle.textContent = translatedText; // Safe text rendering
+        subtitle.textContent = translatedText;
 
-        // Insert after parent block or after node
         if (node.nextSibling) {
           node.parentNode.insertBefore(subtitle, node.nextSibling);
         } else {
@@ -197,12 +223,11 @@
         translatedNodesRegistry.set(node, { originalText, element: subtitle, mode });
 
       } else if (showOriginal && mode === "inline-badge") {
-        // Default mode: display original text + inline English badge alongside
         const badge = document.createElement("span");
         badge.className = "ut-translation-badge";
         badge.setAttribute("data-ut-translation", "true");
         badge.setAttribute("title", "English Translation");
-        badge.textContent = ` [EN: ${translatedText}] `; // Safe text rendering
+        badge.textContent = ` [EN: ${translatedText}] `;
 
         if (node.nextSibling) {
           node.parentNode.insertBefore(badge, node.nextSibling);
@@ -212,7 +237,6 @@
         translatedNodesRegistry.set(node, { originalText, element: badge, mode });
 
       } else {
-        // Replace mode with tooltip: replace text content and save original in hover title
         const parent = node.parentElement;
         if (parent) {
           parent.classList.add("ut-translated-hover-target");
@@ -232,12 +256,11 @@
    * Translate a list of text nodes in progressive batches
    */
   async function translateNodes(nodes) {
-    if (!nodes || nodes.length === 0) return;
+    if (!nodes || nodes.length === 0) return [];
 
     const sessionId = ++translationSessionId;
     pageStatus = "translating";
 
-    // Batch configuration: 25 items or max 2500 chars per batch
     const BATCH_SIZE = 25;
     const batches = [];
     let currentBatch = [];
@@ -259,16 +282,13 @@
 
     const totalNodesCount = nodes.length;
     let completedNodesCount = 0;
+    const translatedStrings = [];
 
     for (let bIndex = 0; bIndex < batches.length; bIndex++) {
-      // If user restored or cancelled during batch processing, abort
-      if (translationSessionId !== sessionId) {
-        console.log("[Universal Translator] Session aborted or restored.");
-        return;
-      }
+      if (translationSessionId !== sessionId) return translatedStrings;
 
       const batch = batches[bIndex];
-      const textsToTranslate = batch.map(item => item.text);
+      const textsToTranslate = batch.map((item) => item.text);
 
       try {
         const response = await new Promise((resolve) => {
@@ -284,28 +304,26 @@
           );
         });
 
-        if (translationSessionId !== sessionId) return;
+        if (translationSessionId !== sessionId) return translatedStrings;
 
         if (response && response.success && Array.isArray(response.translations)) {
           for (let i = 0; i < batch.length; i++) {
             const translated = response.translations[i];
             if (translated && translated !== batch[i].text) {
               applyTranslationToNode(batch[i].node, batch[i].text, translated);
+              translatedStrings.push(translated);
             }
           }
           completedNodesCount += batch.length;
 
-          // Broadcast progress
           chrome.runtime.sendMessage({
             action: "translationProgress",
             current: completedNodesCount,
             total: totalNodesCount
           }).catch(() => {});
-        } else {
-          console.warn("[Universal Translator] Batch failed:", response?.error);
         }
       } catch (err) {
-        console.error("[Universal Translator] Translation batch error:", err);
+        console.error("[Universal Translator] Batch translation error:", err);
       }
     }
 
@@ -316,6 +334,8 @@
         count: completedNodesCount
       }).catch(() => {});
     }
+
+    return translatedStrings;
   }
 
   /**
@@ -325,28 +345,78 @@
     const nodes = collectEligibleTextNodes(document.body);
     if (nodes.length === 0) {
       pageStatus = "translated";
-      return;
+      return [];
     }
-    await translateNodes(nodes);
+    return await translateNodes(nodes);
+  }
+
+  /**
+   * Reads the screen and translates summary for instant popup display
+   */
+  async function autoReadAndTranslateScreen() {
+    // 1. First trigger in-page translation
+    const pageTranslatePromise = translatePage();
+
+    // 2. Extract key screen blocks
+    const screenBlocks = extractReadableScreenSummary();
+
+    if (isEnglishPage) {
+      return {
+        isEnglish: true,
+        pageLanguage: "en",
+        englishBlocks: screenBlocks.slice(0, 15)
+      };
+    }
+
+    // 3. Batch translate screen blocks for the popup
+    try {
+      const response = await new Promise((resolve) => {
+        chrome.runtime.sendMessage(
+          {
+            action: "translateBatch",
+            texts: screenBlocks.slice(0, 15),
+            target: currentSettings.targetLanguage || "en",
+            source: pageLanguage || "auto",
+            backendUrl: currentSettings.backendUrl
+          },
+          resolve
+        );
+      });
+
+      await pageTranslatePromise;
+
+      if (response && response.success && Array.isArray(response.translations)) {
+        return {
+          isEnglish: false,
+          pageLanguage: response.detected_language || pageLanguage,
+          englishBlocks: response.translations,
+          count: translatedNodesRegistry.size
+        };
+      }
+    } catch (e) {
+      console.warn("Screen summary translation error:", e);
+    }
+
+    return {
+      isEnglish: false,
+      pageLanguage: pageLanguage,
+      englishBlocks: screenBlocks,
+      count: translatedNodesRegistry.size
+    };
   }
 
   /**
    * Restore original page content
-   * Removes all extension-created DOM elements and reverts replaced text.
    */
   function restoreOriginalPage() {
-    // Invalidate any pending translation callbacks
     translationSessionId++;
     isMutatingOwnDom = true;
 
     try {
       translatedNodesRegistry.forEach((data, node) => {
-        // If an extra badge or subtitle element was created, remove it
         if (data.element && data.element.parentNode) {
           data.element.parentNode.removeChild(data.element);
         }
-
-        // If node text was replaced, restore original text
         if (data.mode === "replace" && node && node.parentNode) {
           node.textContent = data.originalText;
           if (node.parentElement) {
@@ -356,10 +426,8 @@
         }
       });
 
-      // Clear registries
       translatedNodesRegistry.clear();
       pageStatus = "restored";
-
       chrome.runtime.sendMessage({ action: "restored" }).catch(() => {});
     } finally {
       isMutatingOwnDom = false;
@@ -367,14 +435,13 @@
   }
 
   /**
-   * MutationObserver for dynamic page content with debounce throttling
+   * MutationObserver for dynamic page content
    */
   let mutationTimeout = null;
   const pendingAddedNodes = new Set();
 
   function setupMutationObserver() {
     const observer = new MutationObserver((mutations) => {
-      // Disregard mutations triggered by the extension itself
       if (isMutatingOwnDom) return;
       if (pageStatus !== "translated" && !currentSettings.autoTranslate) return;
 
@@ -382,7 +449,6 @@
       for (const mut of mutations) {
         if (mut.type === "childList" && mut.addedNodes.length > 0) {
           for (const added of mut.addedNodes) {
-            // Ignore if added node is extension's own UI
             if (added.nodeType === Node.ELEMENT_NODE) {
               if (added.classList && (
                 added.classList.contains("ut-translation-badge") ||
@@ -404,14 +470,11 @@
         if (mutationTimeout) clearTimeout(mutationTimeout);
         mutationTimeout = setTimeout(() => {
           processDynamicNodes();
-        }, 350); // 350ms throttle
+        }, 350);
       }
     });
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 
   function processDynamicNodes() {
@@ -436,10 +499,13 @@
     }
   }
 
-  /**
-   * Listen for commands from Popup or Background worker
-   */
+  // Runtime message listener
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "autoReadAndTranslateScreen") {
+      autoReadAndTranslateScreen().then((data) => sendResponse(data));
+      return true;
+    }
+
     if (message.action === "translatePage") {
       translatePage().then(() => sendResponse({ success: true, status: pageStatus }));
       return true;
@@ -469,12 +535,9 @@
     }
   });
 
-  /**
-   * Initialization routine
-   */
+  // Initialization routine
   async function init() {
     try {
-      // 1. Fetch user settings
       const resp = await new Promise((resolve) => {
         chrome.runtime.sendMessage({ action: "getSettings" }, resolve);
       });
@@ -482,23 +545,17 @@
         currentSettings = { ...currentSettings, ...resp.settings };
       }
 
-      // 2. Detect page language
       await detectPageLanguage();
-
-      // 3. Setup dynamic content observer
       setupMutationObserver();
 
-      // 4. Auto-translation logic
+      // Automatically translate foreign pages on page load
       if (currentSettings.autoTranslate) {
         if (isEnglishPage) {
           pageStatus = "already_english";
-          console.log("[Universal Translator] Page language is English. Skipping auto-translation.");
         } else {
-          console.log(`[Universal Translator] Auto-translating foreign page (detected: ${pageLanguage})...`);
-          // Slight delay to allow initial DOM rendering to settle
           setTimeout(() => {
             translatePage();
-          }, 300);
+          }, 350);
         }
       }
     } catch (err) {
@@ -506,7 +563,6 @@
     }
   }
 
-  // Run when DOM is ready
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
   } else {

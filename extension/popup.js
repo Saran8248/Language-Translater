@@ -1,15 +1,19 @@
 /**
  * Universal Translator - Popup Script
- * Handles settings persistence, tab communication, progress events, and UI states.
+ * Automatically reads the screen on open, translates into English,
+ * and displays English content immediately without manual connection steps.
  */
 
 document.addEventListener("DOMContentLoaded", async () => {
   // UI Elements
   const backendBadge = document.getElementById("backend-status-badge");
   const backendStatusText = document.getElementById("backend-status-text");
-  const footerProviderName = document.getElementById("footer-provider-name");
   const pageLangDisplay = document.getElementById("page-lang-display");
   const statusBox = document.getElementById("status-live-region");
+  const englishContentBody = document.getElementById("english-content-body");
+  const btnCopyEnglish = document.getElementById("btn-copy-english");
+  const copyBtnText = document.getElementById("copy-btn-text");
+
   const progressContainer = document.getElementById("progress-container");
   const progressBarFill = document.getElementById("progress-bar-fill");
   const progressText = document.getElementById("progress-text");
@@ -17,77 +21,95 @@ document.addEventListener("DOMContentLoaded", async () => {
   const btnTranslate = document.getElementById("btn-translate");
   const btnTranslateText = document.getElementById("btn-translate-text");
   const btnRestore = document.getElementById("btn-restore");
-  const btnTestBackend = document.getElementById("btn-test-backend");
-  const btnSaveSettings = document.getElementById("btn-save-settings");
 
   const toggleAuto = document.getElementById("toggle-auto");
   const toggleOriginal = document.getElementById("toggle-original");
   const selectDisplayMode = document.getElementById("select-display-mode");
-  const selectTargetLang = document.getElementById("select-target-lang");
   const inputBackendUrl = document.getElementById("input-backend-url");
   const settingsForm = document.getElementById("settings-form");
 
   let activeTabId = null;
   let isTranslating = false;
+  let latestEnglishText = "";
 
-  /**
-   * Update visual status message
-   */
   function setStatus(message, type = "normal") {
     statusBox.textContent = message;
     statusBox.className = "status-box";
-    if (type === "error") {
-      statusBox.classList.add("error");
-    } else if (type === "success") {
-      statusBox.classList.add("success");
-    }
+    if (type === "error") statusBox.classList.add("error");
+    else if (type === "success") statusBox.classList.add("success");
   }
 
-  /**
-   * Update backend connection badge
-   */
-  function setBackendStatus(connected, providerName = "", errorMsg = "") {
-    backendBadge.className = "status-badge";
-    if (connected) {
-      backendBadge.classList.add("badge-connected");
-      backendStatusText.textContent = providerName ? `Connected (${providerName})` : "Connected";
-      footerProviderName.textContent = providerName || "Connected";
-    } else {
-      backendBadge.classList.add("badge-disconnected");
-      backendStatusText.textContent = "Offline";
-      footerProviderName.textContent = "Offline";
-      if (errorMsg) {
-        setStatus(`Backend offline: ${errorMsg}`, "error");
-      }
+  function displayEnglishContent(blocks, isAlreadyEnglish = false) {
+    if (!blocks || blocks.length === 0) {
+      englishContentBody.innerHTML = `<p style="color:#64748b; font-style:italic;">No readable text found on this screen.</p>`;
+      latestEnglishText = "";
+      return;
     }
+
+    latestEnglishText = blocks.join("\n\n");
+    let html = "";
+    if (isAlreadyEnglish) {
+      html += `<div style="margin-bottom:6px; color:#16a34a; font-weight:600; font-size:11px;">✓ This page is already in English:</div>`;
+    }
+
+    for (const b of blocks) {
+      const escaped = b.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      html += `<p>${escaped}</p>`;
+    }
+    englishContentBody.innerHTML = html;
   }
 
-  /**
-   * Check backend health
-   */
-  async function checkBackend(url) {
-    backendBadge.className = "status-badge badge-checking";
-    backendStatusText.textContent = "Checking...";
+  // Copy button handler
+  btnCopyEnglish.addEventListener("click", async () => {
+    if (!latestEnglishText) return;
     try {
-      const res = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({ action: "checkBackendStatus", backendUrl: url }, resolve);
-      });
-      if (res && res.connected) {
-        setBackendStatus(true, res.provider);
-        return true;
-      } else {
-        setBackendStatus(false, "", res?.error || "Cannot reach server");
-        return false;
-      }
+      await navigator.clipboard.writeText(latestEnglishText);
+      copyBtnText.textContent = "Copied!";
+      setTimeout(() => {
+        copyBtnText.textContent = "Copy Text";
+      }, 2000);
     } catch (e) {
-      setBackendStatus(false, "", e.message);
-      return false;
+      console.warn("Clipboard copy failed:", e);
     }
+  });
+
+  // Automatically read and translate screen
+  async function triggerAutoScreenTranslation() {
+    if (!activeTabId) return;
+
+    isTranslating = true;
+    btnTranslate.disabled = true;
+    btnTranslateText.textContent = "Translating...";
+    setStatus("Reading screen and auto-translating into English...", "normal");
+
+    chrome.tabs.sendMessage(activeTabId, { action: "autoReadAndTranslateScreen" }, (response) => {
+      isTranslating = false;
+      btnTranslate.disabled = false;
+      btnTranslateText.textContent = "Re-scan Screen";
+
+      if (chrome.runtime.lastError || !response) {
+        setStatus("Could not read tab. Refresh the webpage if needed.", "error");
+        englishContentBody.innerHTML = `<p style="color:#dc2626;">Could not access page text. Please refresh the webpage.</p>`;
+        return;
+      }
+
+      // Display detected language
+      if (response.pageLanguage) {
+        pageLangDisplay.textContent = response.pageLanguage.toUpperCase();
+      }
+
+      if (response.isEnglish) {
+        pageLangDisplay.textContent = "EN (English)";
+        setStatus("Already English", "normal");
+        displayEnglishContent(response.englishBlocks, true);
+      } else {
+        setStatus(`Translation complete (${response.count || response.englishBlocks?.length || 0} items)`, "success");
+        displayEnglishContent(response.englishBlocks, false);
+      }
+    });
   }
 
-  /**
-   * Load stored settings and fill form
-   */
+  // Load settings
   async function loadSettings() {
     return new Promise((resolve) => {
       chrome.runtime.sendMessage({ action: "getSettings" }, (res) => {
@@ -96,7 +118,6 @@ document.addEventListener("DOMContentLoaded", async () => {
           toggleAuto.checked = s.autoTranslate !== false;
           toggleOriginal.checked = s.showOriginal !== false;
           if (s.displayMode) selectDisplayMode.value = s.displayMode;
-          if (s.targetLanguage) selectTargetLang.value = s.targetLanguage;
           if (s.backendUrl) inputBackendUrl.value = s.backendUrl;
         }
         resolve(res?.settings);
@@ -104,48 +125,40 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  /**
-   * Collect and save settings
-   */
+  // Save settings
   async function saveSettings(silent = false) {
     const newSettings = {
       autoTranslate: toggleAuto.checked,
       showOriginal: toggleOriginal.checked,
       displayMode: selectDisplayMode.value,
-      targetLanguage: selectTargetLang.value,
       backendUrl: inputBackendUrl.value.trim()
     };
 
     return new Promise((resolve) => {
       chrome.runtime.sendMessage({ action: "saveSettings", settings: newSettings }, (res) => {
         if (res && res.success) {
-          // Notify active tab of updated settings
           if (activeTabId) {
             chrome.tabs.sendMessage(activeTabId, { action: "updateSettings", settings: newSettings }).catch(() => {});
           }
           if (!silent) {
             setStatus("Settings saved successfully.", "success");
-            setTimeout(() => setStatus("Ready to translate"), 2000);
+            setTimeout(() => setStatus("Ready"), 2000);
           }
           resolve(true);
         } else {
-          if (!silent) setStatus("Failed to save settings.", "error");
           resolve(false);
         }
       });
     });
   }
 
-  /**
-   * Query status from active tab content script
-   */
-  async function queryActiveTab() {
+  // Query tab and start auto-translation immediately
+  async function initTab() {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab) return;
       activeTabId = tab.id;
 
-      // Check for restricted URLs (chrome://, webstore, file:// without access)
       if (
         !tab.url ||
         tab.url.startsWith("chrome://") ||
@@ -154,136 +167,63 @@ document.addEventListener("DOMContentLoaded", async () => {
       ) {
         pageLangDisplay.textContent = "N/A";
         setStatus("This page cannot be accessed by the extension", "error");
+        englishContentBody.innerHTML = `<p style="color:#64748b; font-style:italic;">Protected browser pages cannot be translated.</p>`;
         btnTranslate.disabled = true;
         btnRestore.disabled = true;
         return;
       }
 
-      // Ping content script
-      chrome.tabs.sendMessage(activeTabId, { action: "getPageStatus" }, (response) => {
-        if (chrome.runtime.lastError || !response) {
-          pageLangDisplay.textContent = "Unknown";
-          setStatus("Ready to translate");
-          return;
-        }
-
-        // Display language
-        if (response.language) {
-          pageLangDisplay.textContent = response.language.toUpperCase();
-        }
-
-        if (response.isEnglish) {
-          pageLangDisplay.textContent = "EN (English)";
-          setStatus("Already English", "normal");
-        } else if (response.status === "translated") {
-          setStatus(`Translation complete (${response.translatedCount || 0} items)`, "success");
-        } else if (response.status === "translating") {
-          isTranslating = true;
-          btnTranslate.disabled = true;
-          btnTranslateText.textContent = "Translating...";
-          progressContainer.classList.remove("hidden");
-          setStatus("Translating page...", "normal");
-        } else if (response.status === "restored") {
-          setStatus("Original page restored", "normal");
-        } else {
-          setStatus("Ready to translate");
-        }
-      });
+      // AUTOMATICALLY READ & TRANSLATE SCREEN ON OPEN!
+      triggerAutoScreenTranslation();
     } catch (e) {
-      console.warn("Tab query error:", e);
+      console.warn("Init tab error:", e);
     }
   }
 
-  // Handle runtime messages for translation progress
+  // Translation progress listener
   chrome.runtime.onMessage.addListener((message) => {
     if (message.action === "translationProgress") {
-      isTranslating = true;
       progressContainer.classList.remove("hidden");
       const pct = Math.round((message.current / (message.total || 1)) * 100);
       progressBarFill.style.width = `${pct}%`;
       progressText.textContent = `Translating: ${message.current} / ${message.total}`;
-      setStatus(`Translating page... (${message.current}/${message.total})`, "normal");
     }
 
     if (message.action === "translationFinished") {
-      isTranslating = false;
-      btnTranslate.disabled = false;
-      btnTranslateText.textContent = "Translate this page";
       progressContainer.classList.add("hidden");
-      setStatus(`Translation complete (${message.count} items)`, "success");
+      setStatus(`Screen translated (${message.count} items)`, "success");
     }
 
     if (message.action === "restored") {
-      isTranslating = false;
-      btnTranslate.disabled = false;
-      btnTranslateText.textContent = "Translate this page";
       progressContainer.classList.add("hidden");
       setStatus("Original page restored", "normal");
+      englishContentBody.innerHTML = `<p style="color:#64748b; font-style:italic;">Original text restored. Click "Re-scan Screen" to translate again.</p>`;
     }
   });
 
-  // Event: Translate button click
-  btnTranslate.addEventListener("click", async () => {
-    if (!activeTabId || isTranslating) return;
-
-    isTranslating = true;
-    btnTranslate.disabled = true;
-    btnTranslateText.textContent = "Translating...";
-    progressContainer.classList.remove("hidden");
-    progressBarFill.style.width = "5%";
-    progressText.textContent = "Scanning page...";
-    setStatus("Translating page...", "normal");
-
-    chrome.tabs.sendMessage(activeTabId, { action: "translatePage" }, (res) => {
-      if (chrome.runtime.lastError) {
-        isTranslating = false;
-        btnTranslate.disabled = false;
-        btnTranslateText.textContent = "Translate this page";
-        progressContainer.classList.add("hidden");
-        setStatus("Could not connect to page. Try refreshing.", "error");
-      }
-    });
+  // Re-scan button click
+  btnTranslate.addEventListener("click", () => {
+    triggerAutoScreenTranslation();
   });
 
-  // Event: Restore button click
+  // Restore button click
   btnRestore.addEventListener("click", () => {
     if (!activeTabId) return;
     chrome.tabs.sendMessage(activeTabId, { action: "restorePage" }, () => {
-      isTranslating = false;
-      btnTranslate.disabled = false;
-      btnTranslateText.textContent = "Translate this page";
-      progressContainer.classList.add("hidden");
       setStatus("Original page restored", "normal");
     });
   });
 
-  // Event: Test Backend Connection
-  btnTestBackend.addEventListener("click", async () => {
-    const url = inputBackendUrl.value.trim();
-    if (!url) {
-      setStatus("Please enter a backend URL.", "error");
-      return;
-    }
-    const ok = await checkBackend(url);
-    if (ok) {
-      setStatus("Backend connection verified!", "success");
-    }
-  });
-
-  // Event: Save Settings Form Submit
-  settingsForm.addEventListener("submit", async (e) => {
+  // Settings form handlers
+  settingsForm.addEventListener("submit", (e) => {
     e.preventDefault();
-    await saveSettings(false);
+    saveSettings(false);
   });
-
-  // Auto-save when toggles change for convenience
   toggleAuto.addEventListener("change", () => saveSettings(true));
   toggleOriginal.addEventListener("change", () => saveSettings(true));
   selectDisplayMode.addEventListener("change", () => saveSettings(true));
-  selectTargetLang.addEventListener("change", () => saveSettings(true));
 
   // Initialize
-  const settings = await loadSettings();
-  await checkBackend(settings?.backendUrl || inputBackendUrl.value);
-  await queryActiveTab();
+  await loadSettings();
+  await initTab();
 });
